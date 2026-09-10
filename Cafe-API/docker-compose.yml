@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: 'postgres:latest'
+    restart: always
+    volumes:
+      - postgres_data_volume:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=cafedb
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    security_opt:
+      - "apparmor:unconfined"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=cafedb
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data_volume:

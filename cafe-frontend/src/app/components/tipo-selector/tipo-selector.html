@@ -1,0 +1,15 @@
+<h3>Filtrar por Tipo</h3>
+
+<div class="contenedor-filtros">
+  
+  <button class="btn-tipo" (click)="seleccionarTipo(null)">
+    Mostrar Todos
+  </button>
+  
+  <button *ngFor="let tipo of tipos" 
+          class="btn-tipo" 
+          (click)="seleccionarTipo(tipo.id)">
+    {{ tipo.name }}
+  </button>
+
+</div>

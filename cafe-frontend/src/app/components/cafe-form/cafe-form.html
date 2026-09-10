@@ -1,0 +1,49 @@
+<div class="form-container">
+  <h2>{{ esEdicion ? 'Editar Café' : 'Nuevo Café' }}</h2>
+
+  <div *ngIf="mensajeError" class="alert-error">
+  {{ mensajeError }}
+  </div>
+
+  <form (ngSubmit)="guardarCafe()" #cafeForm="ngForm">
+    
+    <div class="form-group">
+      <label for="name">Nombre*:</label>
+      <input type="text" id="name" name="name" 
+             [(ngModel)]="cafe.name" required minlength="3" 
+             #nameField="ngModel"
+             [class.is-invalid]="nameField.invalid && (nameField.dirty || nameField.touched)">
+      
+      <div *ngIf="nameField.invalid && (nameField.dirty || nameField.touched)" class="error-msg">
+        <small *ngIf="nameField.errors?.['required']">El nombre es obligatorio.</small>
+        <small *ngIf="nameField.errors?.['minlength']">Debe tener al menos 3 caracteres.</small>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="desc">Descripción:</label>
+      <input type="text" id="desc" name="desc" [(ngModel)]="cafe.description">
+    </div>
+
+    <div class="form-group">
+      <label for="tipo">Tipo de Café*:</label>
+      <select id="tipo" name="tipo" 
+              [(ngModel)]="cafe.tipoId" required 
+              #tipoField="ngModel"
+              [class.is-invalid]="tipoField.invalid && (tipoField.dirty || tipoField.touched)">
+        <option [ngValue]="0" disabled>Seleccione un tipo</option>
+        <option *ngFor="let t of tipos" [value]="t.id">
+          {{ t.name }} - ({{ t.description }})
+        </option>
+      </select>
+
+      <div *ngIf="tipoField.invalid && (tipoField.dirty || tipoField.touched)" class="error-msg">
+        <small *ngIf="tipoField.errors?.['required']">Debes seleccionar un tipo.</small>
+      </div>
+    </div>
+
+    <button type="submit" [disabled]="!cafeForm.form.valid || cafe.tipoId === 0">Guardar</button>
+    <a routerLink="/cafes" class="btn-cancel">Cancelar</a>
+    
+  </form>
+</div>

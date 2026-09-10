@@ -1,0 +1,37 @@
+/* src/app/components/tipo-selector/tipo-selector.component.css */
+
+.contenedor-filtros {
+  display: flex;
+  flex-direction: column; /* Uno debajo del otro */
+  gap: 5px; /* Espacio entre botones */
+}
+
+.btn-tipo {
+  /* --- Estilos idénticos a tus botones de acción --- */
+  display: block;
+  width: 100%;
+  padding: 8px;
+  text-align: center;
+  border: none; /* Quitamos el borde por defecto del botón */
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.3s; /* Suaviza el cambio de color */
+  
+  /* --- Color del botón --- */
+  background-color: #A67B5B; /* Usamos el mismo café del header para consistencia */
+  /* O podés usar un gris: background-color: #6c757d; */
+  
+  color: white;
+}
+
+/* Efecto Hover (cuando pasas el mouse) */
+.btn-tipo:hover {
+  opacity: 0.9;
+  background-color: #8c664a; /* Un café un poco más oscuro al pasar el mouse */
+}
+
+/* (Opcional) Estilo para cuando un botón está activo/presionado */
+.btn-tipo:active {
+  transform: translateY(1px); /* Pequeño efecto de presión */
+}

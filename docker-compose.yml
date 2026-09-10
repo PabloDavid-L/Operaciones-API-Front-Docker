@@ -1,0 +1,44 @@
+services:
+  # 1. Base de datos
+  postgres:
+    image: 'postgres:16'
+    restart: always
+    volumes:
+      - postgres_data_volume:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=cafedb
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - '5432:5432'
+    security_opt:
+      - "apparmor:unconfined"
+
+  # 2. API NestJS
+  api:
+    build:
+      context: ./Cafe-API    #  carpeta backend
+      dockerfile: Dockerfile
+    ports:
+      - '3000:3000'
+    environment:
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - DB_NAME=cafedb
+    depends_on:
+      - postgres
+
+  # 3. Frontend Angular (Servido con Nginx)
+  frontend:
+    build:
+      context: ./cafe-frontend    # carpeta de frontend 
+      dockerfile: Dockerfile
+    ports:
+      - '8080:80'
+    depends_on:
+      - api
+
+volumes:
+  postgres_data_volume:

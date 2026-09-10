@@ -1,0 +1,31 @@
+.form-container { max-width: 500px; margin: 20px auto; padding: 20px; background: white; border: 1px solid #ccc; }
+.form-group { margin-bottom: 15px; }
+label { display: block; margin-bottom: 5px; font-weight: bold; }
+input, select { width: 100%; padding: 8px; box-sizing: border-box; }
+button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; cursor: pointer; margin-right: 10px; }
+.btn-cancel { text-decoration: none; color: #333; }
+/* Estilos de Validación y Errores */
+.is-invalid {
+  border: 1px solid #dc3545 !important;
+  background-color: #fff8f8;
+}
+
+.error-msg {
+  color: #dc3545;
+  font-size: 0.85rem;
+  margin-top: 4px;
+}
+
+.alert-error {
+  background-color: #f8d7da;
+  color: #721c24;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  border: 1px solid #f5c6cb;
+}
+
+button:disabled {
+  background-color: #cccccc;
+  cursor: not-allowed;
+}

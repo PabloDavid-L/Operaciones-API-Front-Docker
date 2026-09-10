@@ -1,0 +1,16 @@
+body, html {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+  background-color: #f4f4f4;
+}
+
+/* Contenedor para tablas responsive */
+.table-responsive {
+  width: 100%;            /* Ocupa todo el ancho disponible */
+  overflow-x: auto;       /* LA CLAVE: Si el contenido se pasa, habilita scroll horizontal */
+  -webkit-overflow-scrolling: touch; /* Suaviza el scroll en iPhones/Android */
+  margin-bottom: 15px;    /* Un poco de aire abajo */
+  border: 1px solid #eee; /* Opcional: un borde sutil al contenedor */
+}

@@ -1,0 +1,56 @@
+<div class="layout-container">
+  
+  <div class="sidebar">
+    <h3>Panel de Tipos</h3>
+    <div style="padding: 10px; background-color: #fff; border-radius: 4px; border: 1px solid #ddd;">
+      <p><strong>Total registrados:</strong> {{ tipos.length }}</p>
+      <p style="font-size: 0.9rem; color: #666;">Desde aquí podés gestionar las categorías disponibles para tus cafés.</p>
+    </div>
+  </div>
+
+  <div class="main-content">
+    
+    <h2>Lista de Tipos</h2>
+
+    <div *ngIf="errorCarga" class="alert-error">
+      {{ errorCarga }}
+    </div>
+
+    <div class="table-responsive">
+
+      <table *ngIf="tipos.length > 0" class="cafe-table">
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Nombre</th>
+      <th class="col-descripcion">Descripción</th>
+      <th>Acciones</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr *ngFor="let t of tipos">
+      
+      <td data-label="ID">{{ t.id }}</td>
+      
+      <td data-label="Nombre" class="dato-nombre">{{ t.name }}</td>
+      
+      <td data-label="Descripción" class="col-descripcion">{{ t.description }}</td>
+      
+      <td class="acciones-cell">
+         <a [routerLink]="['/tipos/editar', t.id]" class="btn-accion btn-editar">Editar</a>
+         <button (click)="borrarTipo(t.id)" class="btn-accion btn-borrar">Eliminar</button>
+      </td>
+
+    </tr>
+  </tbody>
+</table>
+
+    </div>
+    <div *ngIf="tipos.length === 0 && !errorCarga" class="empty-state">
+      <p>📭 No hay tipos de café cargados.</p>
+      <p>¡Usá el botón <b>"+ Nuevo Tipo"</b> en el menú superior para crear uno!</p>
+    </div>
+
+  </div>
+
+</div>
