@@ -95,40 +95,19 @@ jobs:
       - name: Install Chromium for tests
         run: |
           sudo apt-get update
-          # intenta instalar variantes; algunas runners usan 'chromium' en lugar de 'chromium-browser'
-          sudo apt-get install -y chromium chromium-driver || true
-          sudo apt-get install -y chromium-browser || true
-          # buscar la ruta del binario disponible
-          CHROME_PATH=$(which chromium || which chromium-browser || which google-chrome || true)
-          if [ -z "$CHROME_PATH" ]; then
-            echo "ERROR: Chrome/Chromium binary not found"
-            exit 1
-          fi
-          echo "CHROME found at $CHROME_PATH"
-          # exportar para pasos posteriores
-          echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
+          sudo apt-get install -y chromium-browser
 
       - name: Tests
         run: |
-          set -e
-          # ensure we have a chromium binary available
-          CHROME_PATH=$(which chromium || which chromium-browser || which google-chrome || true)
-          if [ -z "$CHROME_PATH" ]; then
-            echo "Chrome/Chromium not found — attempting to install"
-            sudo apt-get update
-            sudo apt-get install -y chromium chromium-driver chromium-browser || true
-            CHROME_PATH=$(which chromium || which chromium-browser || which google-chrome || true)
-          fi
+          CHROME_PATH=$(which chromium-browser || which chromium || which google-chrome || true)
           if [ -z "$CHROME_PATH" ]; then
             echo "ERROR: Chrome/Chromium binary not found"
             exit 1
           fi
           echo "Using Chrome binary: $CHROME_PATH"
-          export CHROME_BIN="$CHROME_PATH"
-          # optional: print to GITHUB_ENV if you still want it for later steps
-          echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
-          npm test -- --watch=false
+          npm test -- --watch=false --browsers=ChromeHeadless
         env:
+          CHROME_BIN: /usr/bin/chromium-browser
           CI: true
 
       - name: Build
