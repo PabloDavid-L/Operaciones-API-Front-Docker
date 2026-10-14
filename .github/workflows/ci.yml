@@ -109,7 +109,25 @@ jobs:
           echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
 
       - name: Tests
-        run: npm test -- --watch=false
+        run: |
+          set -e
+          # ensure we have a chromium binary available
+          CHROME_PATH=$(which chromium || which chromium-browser || which google-chrome || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "Chrome/Chromium not found — attempting to install"
+            sudo apt-get update
+            sudo apt-get install -y chromium chromium-driver chromium-browser || true
+            CHROME_PATH=$(which chromium || which chromium-browser || which google-chrome || true)
+          fi
+          if [ -z "$CHROME_PATH" ]; then
+            echo "ERROR: Chrome/Chromium binary not found"
+            exit 1
+          fi
+          echo "Using Chrome binary: $CHROME_PATH"
+          export CHROME_BIN="$CHROME_PATH"
+          # optional: print to GITHUB_ENV if you still want it for later steps
+          echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
+          npm test -- --watch=false
         env:
           CI: true
 
