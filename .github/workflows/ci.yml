@@ -95,12 +95,23 @@ jobs:
       - name: Install Chromium for tests
         run: |
           sudo apt-get update
-          sudo apt-get install -y chromium-browser
+          # intenta instalar variantes; algunas runners usan 'chromium' en lugar de 'chromium-browser'
+          sudo apt-get install -y chromium chromium-driver || true
+          sudo apt-get install -y chromium-browser || true
+          # buscar la ruta del binario disponible
+          CHROME_PATH=$(which chromium || which chromium-browser || which google-chrome || true)
+          if [ -z "$CHROME_PATH" ]; then
+            echo "ERROR: Chrome/Chromium binary not found"
+            exit 1
+          fi
+          echo "CHROME found at $CHROME_PATH"
+          # exportar para pasos posteriores
+          echo "CHROME_BIN=$CHROME_PATH" >> $GITHUB_ENV
 
       - name: Tests
         run: npm test -- --watch=false
         env:
-          CHROME_BIN: /usr/bin/chromium-browser
+          CI: true
 
       - name: Build
         run: npm run build
