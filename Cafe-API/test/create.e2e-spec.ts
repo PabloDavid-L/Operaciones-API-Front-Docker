@@ -51,9 +51,9 @@ describe('Create tests (e2e)', () => {
     // en los tests que en el entorno real.
     app.useGlobalPipes(
       new ValidationPipe({
-        whitelist: true,          // Ignora propiedades no definidas en el DTO
+        whitelist: true, // Ignora propiedades no definidas en el DTO
         forbidNonWhitelisted: true, // Lanza error 400 si hay propiedades extra
-        transform: true,          // Convierte tipos automáticamente
+        transform: true, // Convierte tipos automáticamente
         transformOptions: {
           enableImplicitConversion: true, // Convierte string a number, etc.
         },

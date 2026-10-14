@@ -6,6 +6,15 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { TipoSelectorComponent } from '../tipo-selector/tipo-selector';
 
+interface CafeQueryParams {
+  limit: number;
+  page: number;
+  tipoId?: number;
+  description?: string;
+  sortBy?: string;
+  orderBy?: 'ASC' | 'DESC';
+}
+
 @Component({
   selector: 'app-cafe-list', //HTML : <app-cafe-list>
   standalone: true,
@@ -31,7 +40,7 @@ export class CafeListComponent implements OnInit {
     this.errorCarga = '';
     
     // Preparamos los parámetros para el QueryDTO del backend
-    const params: any = {
+    const params: CafeQueryParams = {
       limit: 20,
       page: 1,
     };
@@ -58,7 +67,7 @@ export class CafeListComponent implements OnInit {
         next: () => {
           this.cargarCafes(); 
         },
-        error: (err) => {
+        error: () => {
           alert('No se pudo eliminar el café. Puede que ya no exista.');
         }
       });

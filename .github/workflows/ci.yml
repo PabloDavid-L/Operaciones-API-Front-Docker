@@ -89,8 +89,18 @@ jobs:
       - name: Install deps
         run: npm ci
 
+      - name: Lint
+        run: npm run lint
+
+      - name: Install Chromium for tests
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y chromium-browser
+
       - name: Tests
         run: npm test -- --watch=false
+        env:
+          CHROME_BIN: /usr/bin/chromium-browser
 
       - name: Build
         run: npm run build

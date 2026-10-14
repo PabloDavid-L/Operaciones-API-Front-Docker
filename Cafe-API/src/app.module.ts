@@ -27,22 +27,22 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 
         return {
           type: 'postgres',
-          
+
           // Si existe la variable de entorno (Nube), úsala.
           // Si no existe (Local), usa el valor fijo después del '||'.
-          
+
           host: configService.get<string>('DB_HOST') || 'localhost',
           port: configService.get<number>('DB_PORT') || 5432,
           username: configService.get<string>('DB_USER') || 'postgres',
           password: configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'cafedb',
-          
+
           // Configuración SSL: Obligatoria en Render, pero da error en local.
           // La activamos solo si estamos en producción o si la variable DB_SSL es 'true'
           ssl: isProduction ? { rejectUnauthorized: false } : false,
-          
+
           autoLoadEntities: true,
-          
+
           // Sincronizar solo si NO estamos en producción
           synchronize: true,
         };
