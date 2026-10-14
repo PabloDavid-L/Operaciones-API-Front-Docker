@@ -81,7 +81,7 @@ export class CafesService {
     const dataToPreload: Partial<Cafe> = { ...restOfDto };
 
     if (tipoId) {
-      dataToPreload.tipo = { id: tipoId } as any;
+      dataToPreload.tipo = { id: tipoId } as Cafe['tipo'];
     }
 
     const cafe = await this.cafeRepository.preload({

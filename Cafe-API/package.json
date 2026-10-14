@@ -73,6 +73,14 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "moduleNameMapper": {
+      "src/tipos/entities/tipo\\.entity": "<rootDir>/tipos/entities/tipo.entity",
+      "src/cafes/entities/cafe\\.entity": "<rootDir>/cafes/entities/cafe.entity",
+      "src/cafes/dto": "<rootDir>/cafes/dto",
+      "src/tipos/dto": "<rootDir>/tipos/dto",
+      "src/cafes/entities": "<rootDir>/cafes/entities",
+      "src/tipos/entities": "<rootDir>/tipos/entities"
+    }
   }
 }
