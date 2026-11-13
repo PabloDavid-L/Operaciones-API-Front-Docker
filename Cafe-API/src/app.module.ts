@@ -30,8 +30,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         // que la misma imagen funcione en local (sin SSL) y en producción.
         const dbSsl = configService.get<string>('DB_SSL') === 'true';
 
-        const dbSynchronizeEnv =
-          configService.get<string>('DB_SYNCHRONIZE');
+        const dbSynchronizeEnv = configService.get<string>('DB_SYNCHRONIZE');
         const dbSynchronize =
           dbSynchronizeEnv !== undefined
             ? dbSynchronizeEnv === 'true'

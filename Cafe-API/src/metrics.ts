@@ -1,3 +1,4 @@
+import type { NextFunction, Request, Response } from 'express';
 import {
   Counter,
   Histogram,
@@ -30,8 +31,16 @@ export const httpRequestDuration = new Histogram({
   registers: [register],
 });
 
+// `req.route` está tipado como `any` en @types/express; lo casteamos para que
+// las reglas no-unsafe-* de ESLint no fallen.
+type RouteInfo = { path?: string };
+
 // Middleware para registrar cada petición entrante
-export const metricsMiddleware = (req: any, res: any, next: any) => {
+export const metricsMiddleware = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
   const start = process.hrtime.bigint();
 
   res.on('finish', () => {
@@ -39,8 +48,9 @@ export const metricsMiddleware = (req: any, res: any, next: any) => {
 
     // Normalizamos los IDs para no generar una etiqueta distinta por cada
     // registro (evita explotar la cardinalidad de Prometheus).
+    const matchedRoute = req.route as RouteInfo | undefined;
     const route =
-      req.route?.path || req.path.replace(/\/\d+(?=\/|$)/g, '/:id');
+      matchedRoute?.path ?? req.path.replace(/\/\d+(?=\/|$)/g, '/:id');
 
     const labels = {
       method: req.method,
