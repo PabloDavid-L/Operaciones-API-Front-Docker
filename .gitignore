@@ -1,0 +1,12 @@
+# Variables de entorno reales (nunca subir)
+.env
+.env.*
+!.env.example
+!.env.prod.example
+
+# Node
+node_modules/
+dist/
+
+# Sistema
+.DS_Store

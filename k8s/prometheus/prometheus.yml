@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Dentro del cluster la API se resuelve por el Service "api".
+  - job_name: 'cafe-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['api:3000']
+
+  # Prometheus se monitorea a sí mismo.
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

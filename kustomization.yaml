@@ -1,0 +1,34 @@
+# La kustomización vive en la raíz para poder tomar los archivos de configuración
+# existentes (prometheus/ y grafana/) sin duplicarlos dentro de k8s/.
+#
+# Aplicar con:  kubectl apply -k .
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cafe
+
+resources:
+  - k8s/namespace.yaml
+  - k8s/secret.yaml
+  - k8s/api-config.yaml
+  - k8s/frontend-config.yaml
+  - k8s/postgres.yaml
+  - k8s/backend.yaml
+  - k8s/frontend.yaml
+  - k8s/prometheus.yaml
+  - k8s/grafana.yaml
+  - k8s/ingress.yaml
+
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - k8s/prometheus/prometheus.yml
+  - name: grafana-datasource
+    files:
+      - grafana/provisioning/datasources/prometheus.yml
+  - name: grafana-dashboards-provider
+    files:
+      - grafana/provisioning/dashboards/dashboards.yml
+  - name: grafana-dashboard-cafe
+    files:
+      - grafana/dashboards/cafe-api.json

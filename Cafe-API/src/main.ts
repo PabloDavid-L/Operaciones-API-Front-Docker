@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { metricsMiddleware } from './metrics';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -19,6 +20,11 @@ async function bootstrap() {
 
   app.enableCors();
 
+  // Middleware que alimenta los contadores/histogramas de Prometheus.
+  app.use(metricsMiddleware);
+
+  // Un único servidor: API REST y /metrics comparten el puerto 3000.
   await app.listen(process.env.PORT ?? 3000);
 }
+
 void bootstrap();

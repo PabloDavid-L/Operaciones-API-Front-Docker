@@ -6,9 +6,9 @@ services:
     volumes:
       - postgres_data_volume:/var/lib/postgresql/data
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_DB=cafedb
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=${DB_USER:-postgres}
+      - POSTGRES_DB=${DB_NAME:-cafedb}
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-postgres}
     ports:
       - '5432:5432'
     security_opt:
@@ -22,21 +22,27 @@ services:
     ports:
       - '3000:3000'
     environment:
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_NAME=cafedb
+      - DB_HOST=${DB_HOST:-postgres}
+      - DB_PORT=${DB_PORT:-5432}
+      - DB_USER=${DB_USER:-postgres}
+      - DB_PASSWORD=${DB_PASSWORD:-postgres}
+      - DB_NAME=${DB_NAME:-cafedb}
+      # Imagen de producción: en local no usamos SSL y dejamos que cree tablas.
+      - DB_SSL=${DB_SSL:-false}
+      - DB_SYNCHRONIZE=${DB_SYNCHRONIZE:-true}
     depends_on:
       - postgres
 
   # 3. Frontend Angular (Servido con Nginx)
   frontend:
     build:
-      context: ./cafe-frontend    # carpeta de frontend 
+      context: ./cafe-frontend    #  carpeta de frontend
       dockerfile: Dockerfile
     ports:
       - '8080:80'
+    environment:
+      # El navegador debe poder alcanzar esta URL (no el DNS interno de Docker).
+      - API_URL=${API_URL:-http://localhost:3000}
     depends_on:
       - api
 
