@@ -1,0 +1,16 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # La API corre en el host (npm run start:dev) o publica el 3000 si corre
+  # en Docker. En ambos casos Prometheus la alcanza por host.docker.internal.
+  - job_name: 'cafe-api'
+    metrics_path: /metrics
+    static_configs:
+      - targets: ['host.docker.internal:3000']
+
+  # Prometheus se monitorea a sí mismo (útil para comprobar que el stack vive)
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']

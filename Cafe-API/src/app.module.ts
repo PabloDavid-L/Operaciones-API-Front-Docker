@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
+import { MetricsController } from './metrics.controller';
 import { TiposModule } from './tipos/tipos.module';
 import { CafesModule } from './cafes/cafes.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -25,6 +26,17 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
         const isProduction =
           configService.get<string>('NODE_ENV') === 'production';
 
+        // SSL y sincronización se controlan con variables explícitas para
+        // que la misma imagen funcione en local (sin SSL) y en producción.
+        const dbSsl = configService.get<string>('DB_SSL') === 'true';
+
+        const dbSynchronizeEnv =
+          configService.get<string>('DB_SYNCHRONIZE');
+        const dbSynchronize =
+          dbSynchronizeEnv !== undefined
+            ? dbSynchronizeEnv === 'true'
+            : !isProduction;
+
         return {
           type: 'postgres',
 
@@ -37,19 +49,18 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
           password: configService.get<string>('DB_PASSWORD') || 'postgres',
           database: configService.get<string>('DB_NAME') || 'cafedb',
 
-          // Configuración SSL: Obligatoria en Render, pero da error en local.
-          // La activamos solo si estamos en producción o si la variable DB_SSL es 'true'
-          ssl: isProduction ? { rejectUnauthorized: false } : false,
+          // SSL explícito: DB_SSL=true en producción, false en local.
+          ssl: dbSsl ? { rejectUnauthorized: false } : false,
 
           autoLoadEntities: true,
 
-          // Sincronizar solo si NO estamos en producción
-          synchronize: true,
+          // DB_SYNCHRONIZE manda si está definida; si no, true solo en local.
+          synchronize: dbSynchronize,
         };
       },
     }),
   ],
-  controllers: [AppController],
+  controllers: [AppController, MetricsController],
   providers: [AppService],
 })
 export class AppModule {}

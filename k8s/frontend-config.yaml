@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: cafe
+  labels:
+    app.kubernetes.io/part-of: cafe
+data:
+  # El navegador resuelve este host vía /etc/hosts -> IP de minikube.
+  API_URL: http://api.cafe.local

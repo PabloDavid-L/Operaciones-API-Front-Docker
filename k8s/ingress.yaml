@@ -1,0 +1,44 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cafe
+  namespace: cafe
+  labels:
+    app.kubernetes.io/part-of: cafe
+  annotations:
+    # Sin TLS en local: no forzar redirección a HTTPS.
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  # Clase provista por el addon "ingress" de minikube.
+  ingressClassName: nginx
+  rules:
+    - host: cafe.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: frontend
+                port:
+                  number: 80
+    - host: api.cafe.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 3000
+    - host: grafana.cafe.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 3000
