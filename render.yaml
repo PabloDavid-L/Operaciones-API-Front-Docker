@@ -1,0 +1,88 @@
+# ============================================================
+#  Render Blueprint — Operaciones Café
+#
+#  Dos web services "image-backed" que consumen las imágenes
+#  publicadas por GitHub Actions en Docker Hub, más un
+#  Render Postgres gestionado.
+#
+#  El deploy NO es automático por cambio de imagen: se dispara
+#  desde GitHub Actions con los Deploy Hooks (ver cd.yml).
+#  Por eso ambos servicios llevan autoDeploy: false; si no, Render
+#  redeployaría solo al detectar un :latest nuevo y el hook sería
+#  un segundo deploy redundante.
+#
+#  Aplicar: Render Dashboard → New → Blueprint → este repo.
+#  Después copiar los Deploy Hooks de cada servicio a los
+#  secrets RENDER_DEPLOY_HOOK_API / RENDER_DEPLOY_HOOK_FRONTEND.
+# ============================================================
+
+databases:
+  - name: cafe-db-odd
+    plan: free
+    region: oregon
+    postgresMajorVersion: '16'
+
+services:
+  # ----------------------------------------------------------
+  # API NestJS
+  # ----------------------------------------------------------
+  - type: web
+    name: cafe-api-odd
+    runtime: image
+    plan: free
+    region: oregon
+    image:
+      url: docker.io/pablodavid98/cafe-api:latest
+    # El único disparador del deploy es el Deploy Hook desde GitHub Actions.
+    autoDeploy: false
+    healthCheckPath: /
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: cafe-db-odd
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: cafe-db-odd
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: cafe-db-odd
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: cafe-db-odd
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: cafe-db-odd
+          property: database
+      # Render Postgres acepta TLS con certificado self-signed.
+      - key: DB_SSL
+        value: "true"
+      # Todavía no hay migraciones: en el primer deploy debe crear las tablas.
+      - key: DB_SYNCHRONIZE
+        value: "true"
+
+  # ----------------------------------------------------------
+  # Frontend Angular + nginx
+  # ----------------------------------------------------------
+  - type: web
+    name: cafe-frontend-odd
+    runtime: image
+    plan: free
+    region: oregon
+    image:
+      url: docker.io/pablodavid98/cafe-frontend:latest
+    # El único disparador del deploy es el Deploy Hook desde GitHub Actions.
+    autoDeploy: false
+    healthCheckPath: /
+    envVars:
+      # URL pública del API, tomada del propio servicio de Render.
+      # Si el Blueprint no resuelve RENDER_EXTERNAL_URL, reemplazar por:
+      #   value: https://cafe-api-odd.onrender.com
+      - key: API_URL
+        fromService:
+          name: cafe-api-odd
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
