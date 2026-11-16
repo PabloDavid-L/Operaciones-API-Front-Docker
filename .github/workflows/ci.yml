@@ -1,4 +1,4 @@
-name: CI/CD Monorepo
+name: CI Monorepo
 
 on:
   push:

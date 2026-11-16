@@ -1,0 +1,64 @@
+name: CD — Deploy to Render
+
+# ============================================================
+#  CD: dispara el deploy en Render con los Deploy Hooks.
+#
+#  No corre en paralelo al CI: se dispara cuando el workflow
+#  "CI Monorepo" termina, y solo si terminó en success y fue
+#  por un push a main. Así el hook se llama después de que las
+#  imágenes (:sha y :latest) ya están en Docker Hub.
+#
+#  Los servicios de Render tienen autoDeploy: false, por lo que
+#  este hook es el único disparador del deploy.
+#
+#  Requiere los secrets RENDER_DEPLOY_HOOK_API y
+#  RENDER_DEPLOY_HOOK_FRONTEND.
+#
+#  Nota: GitHub solo ejecuta workflow_run si este archivo existe
+#  en la rama por defecto (main).
+# ============================================================
+
+on:
+  workflow_run:
+    workflows: ["CI Monorepo"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+# Un deploy por vez; si llegan dos pushes seguidos, el segundo
+# espera en lugar de pisar al primero.
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Render
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+
+    steps:
+      - name: Trigger Render deploy · API
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_API }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::Falta el secret RENDER_DEPLOY_HOOK_API"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK"
+          echo "Deploy de la API disparado"
+
+      - name: Trigger Render deploy · Frontend
+        env:
+          HOOK: ${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}
+        run: |
+          if [ -z "$HOOK" ]; then
+            echo "::warning::Falta el secret RENDER_DEPLOY_HOOK_FRONTEND"
+            exit 0
+          fi
+          curl -fsS -X POST "$HOOK"
+          echo "Deploy del frontend disparado"
