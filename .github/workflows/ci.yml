@@ -49,10 +49,20 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint:ci
 
-      - name: Unit tests
-        run: npm run test
+      - name: Unit tests + coverage
+        run: npm run test:cov -- --coverageReporters=lcov --coverageReporters=text-summary 2>&1 | tee coverage-output.txt
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo "### Cobertura · API (backend)"
+            echo '```'
+            sed -n '/Coverage summary/,$p' coverage-output.txt 2>/dev/null | head -6 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: E2E tests
         run: npm run test:e2e
@@ -90,14 +100,14 @@ jobs:
         run: npm ci
 
       - name: Lint
-        run: npm run lint
+        run: npm run lint:ci
 
       - name: Install Chromium for tests
         run: |
           sudo apt-get update
           sudo apt-get install -y chromium-browser
 
-      - name: Tests
+      - name: Tests + coverage
         run: |
           CHROME_PATH=$(which chromium-browser || which chromium || which google-chrome || true)
           if [ -z "$CHROME_PATH" ]; then
@@ -105,10 +115,21 @@ jobs:
             exit 1
           fi
           echo "Using Chrome binary: $CHROME_PATH"
-          npm test -- --watch=false --browsers=ChromeHeadless
+          npm run test:cov -- --watch=false --browsers=ChromeHeadless 2>&1 | tee coverage-output.txt
         env:
           CHROME_BIN: /usr/bin/chromium-browser
           CI: true
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          {
+            echo "### Cobertura · Frontend"
+            echo '```'
+            sed -E 's/\x1b\[[0-9;]*[a-zA-Z]//g' coverage-output.txt 2>/dev/null \
+              | sed -n '/Coverage summary/,$p' | head -6 || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build
         run: npm run build

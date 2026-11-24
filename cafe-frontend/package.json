@@ -7,7 +7,9 @@
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
-    "lint": "eslint \"src/**/*.ts\" \"src/**/*.html\" --fix"
+    "test:cov": "ng test --code-coverage",
+    "lint": "eslint \"src/**/*.ts\" \"src/**/*.html\" --fix",
+    "lint:ci": "eslint \"src/**/*.ts\" \"src/**/*.html\" --max-warnings=0"
   },
   "prettier": {
     "printWidth": 100,
