@@ -8,5 +8,9 @@
 node_modules/
 dist/
 
+# Cobertura
+coverage/
+coverage-output.txt
+
 # Sistema
 .DS_Store
