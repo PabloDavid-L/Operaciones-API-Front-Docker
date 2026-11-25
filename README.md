@@ -1,475 +1,346 @@
-# Operaciones Café — Documentación
+# Operaciones Café — API + Frontend
 
-> Monorepo **NestJS + Angular + PostgreSQL** con Docker, CI/CD a Docker Hub,
-> despliegue en **Render** con imágenes publicadas, monitoreo local
-> (Prometheus + Grafana) y Kubernetes local con **minikube**.
->
-> Rama de trabajo actual: **`tests`**. El workflow de CI solo publica imágenes
-> y despliega en push a **`main`**.
+[![CI Monorepo](https://github.com/PabloDavid-L/Operaciones-API-Front-Docker/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/PabloDavid-L/Operaciones-API-Front-Docker/actions/workflows/ci.yml)
+[![CD Render](https://github.com/PabloDavid-L/Operaciones-API-Front-Docker/actions/workflows/cd.yml/badge.svg?branch=main)](https://github.com/PabloDavid-L/Operaciones-API-Front-Docker/actions/workflows/cd.yml)
 
----
+Aplicación de cafés y tipos de café con CRUD completo, filtros, paginación y
+métricas. Es un monorepo con tres servicios que corren juntos con Docker
+Compose:
 
-## Índice
+- **Backend:** NestJS 11 + TypeORM + PostgreSQL → `Cafe-API/`
+- **Frontend:** Angular 20, servido con nginx → `cafe-frontend/`
+- **Base de datos:** PostgreSQL 16 → servicio `postgres` del compose
+- **CI/CD:** GitHub Actions → Docker Hub → Render
 
-**Parte I — Aplicación, Docker y CI**
+Todo el stack local se levanta con **un solo comando**.
 
-1. [Estado actual](#1-estado-actual)
-2. [Arquitectura del repositorio](#2-arquitectura-del-repositorio)
-3. [Flujo de la aplicación](#3-flujo-de-la-aplicación)
-4. [Tests, cobertura y lint](#4-tests-cobertura-y-lint)
-5. [CI/CD — GitHub Actions](#5-cicd--github-actions)
-6. [Docker](#6-docker)
-7. [Variables de entorno](#7-variables-de-entorno)
+## Servicios
 
-**Parte II — Monitoreo y Kubernetes (solo local)**
-
-8. [Monitoreo — Prometheus + Grafana](#8-monitoreo--prometheus--grafana)
-9. [Kubernetes local — minikube](#9-kubernetes-local--minikube)
-
-**Parte III — Despliegue en Render**
-
-10. [Render — despliegue con Docker Hub y Deploy Hooks](#10-render--despliegue-con-docker-hub-y-deploy-hooks)
-
-**Anexos**
-
-11. [Comandos rápidos](#11-comandos-rápidos)
-12. [Resumen](#12-resumen)
-13. [Pendientes](#13-pendientes)
-
----
-
-# PARTE I — Aplicación, Docker y CI
-
-## 1. Estado actual
-
-| Componente | Tecnología | Local | Kubernetes (minikube) |
+| Servicio | Tecnología | Puerto local | Imagen |
 |---|---|---|---|
-| Frontend | Angular 20 + nginx | http://localhost:8080 | http://cafe.local |
-| Backend | NestJS 11 + TypeORM | http://localhost:3000 | http://api.cafe.local |
-| PostgreSQL | 16 | localhost:5432 | Service `postgres:5432` |
-| Prometheus | prom/prometheus | http://localhost:9090 | Service `prometheus:9090` |
-| Grafana | grafana/grafana | http://localhost:3002 | http://grafana.cafe.local |
-| Métricas | prom-client | http://localhost:3000/metrics | http://api.cafe.local/metrics |
+| Frontend | Angular 20 + nginx | `8080` | `pablodavid98/cafe-frontend` (propia) |
+| API | NestJS 11 + TypeORM | `3000` | `pablodavid98/cafe-api` (propia) |
+| Base de datos | PostgreSQL 16 | `5432` | `postgres:16` (oficial) |
+| Prometheus (opcional) | prom/prometheus | `9090` | `prom/prometheus:latest` |
+| Grafana (opcional) | grafana/grafana | `3002` | `grafana/grafana:latest` |
 
-**Producción (Render, plan free):**
+## Versión desplegada en Render
 
-| Servicio | URL | Estado |
-|---|---|---|
-| Frontend | https://cafe-frontend-odd.onrender.com | Online |
-| API | https://cafe-api-odd.onrender.com | Online |
-| Postgres | `cafe-db-odd` (gestionado, interno) | Available |
-
-- **Producción:** Render consume las imágenes publicadas en Docker Hub, sin
-  construir en el servidor. El deploy lo dispara GitHub Actions con Deploy Hooks.
-- **Kubernetes y monitoreo:** pensados **solo para local**. No forman parte del
-  despliegue productivo.
-- **Imágenes locales:** `operaciones-copia-api:latest` y
-  `operaciones-copia-frontend:latest`.
-- **Imágenes de Docker Hub (CI):** `pablodavid98/cafe-api`,
-  `pablodavid98/cafe-frontend` y `pablodavid98/cafe-postgres`, con tags
-  `:<sha>` y `:latest`. Son públicas.
-
----
-
-## 2. Arquitectura del repositorio
-
-```
-Operaciones-copia/
-├── .env.example                  # Variables documentadas (se commitea)
-├── .gitignore                    # Ignora .env y permite .env.example
-├── docker-compose.yml            # Stack local: postgres + api + frontend
-├── docker-compose.monitoring.yml # Prometheus + Grafana (solo local)
-├── kustomization.yaml            # Ensambla los manifiestos de k8s/
-├── README.md
-├── proyecto.md                   # Análisis técnico detallado
-│
-├── k8s/                          # Kubernetes local (minikube)
-│   ├── namespace.yaml
-│   ├── secret.yaml               # Secret dev (NO usar en producción)
-│   ├── api-config.yaml
-│   ├── frontend-config.yaml
-│   ├── postgres.yaml
-│   ├── backend.yaml
-│   ├── frontend.yaml
-│   ├── prometheus.yaml
-│   ├── prometheus/prometheus.yml
-│   ├── grafana.yaml
-│   ├── ingress.yaml
-│   └── README.md
-│
-├── prometheus/
-│   └── prometheus.yml            # Config para Docker Compose
-│
-├── grafana/
-│   ├── dashboards/cafe-api.json  # Dashboard "Café API · Estado y tráfico"
-│   └── provisioning/
-│       ├── datasources/prometheus.yml
-│       └── dashboards/dashboards.yml
-│
-├── .github/workflows/ci.yml
-│
-├── Cafe-API/                     # Backend NestJS
-│   ├── Dockerfile                # Una etapa: build + start:prod
-│   ├── .dockerignore
-│   ├── src/
-│   │   ├── main.ts               # CORS, ValidationPipe, /metrics
-│   │   ├── app.module.ts         # TypeORM + DB_SSL / DB_SYNCHRONIZE
-│   │   ├── metrics.ts            # Registry y contadores de Prometheus
-│   │   ├── metrics.controller.ts # GET /metrics
-│   │   ├── tipos/
-│   │   └── cafes/
-│   └── test/create.e2e-spec.ts
-│
-└── cafe-frontend/                # Frontend Angular
-    ├── Dockerfile                # Build Angular + nginx
-    ├── nginx.conf                # SPA + no-store para env.js
-    ├── docker-entrypoint.d/
-    │   └── 40-generate-env.sh    # Genera env.js desde API_URL
-    ├── public/env.js             # Default para ng serve
-    └── src/
-        ├── index.html            # Carga env.js antes de Angular
-        ├── main.ts               # Override de environment.apiUrl
-        ├── environments/
-        └── app/
-```
-
-> **Nota:** `Cafe-API/docker-compose.yml` existe como legado (solo API + Postgres).
-> El flujo completo se hace con el compose de la raíz.
-
----
-
-## 3. Flujo de la aplicación
-
-### 3.1 Backend — API REST
-
-| Endpoint | Método | Descripción |
-|---|---|---|
-| `/` | GET | Health check |
-| `/metrics` | GET | Métricas Prometheus |
-| `/tipos` | GET | Lista tipos |
-| `/tipos/:id` | GET | Tipo por ID |
-| `/tipos` | POST | Crea tipo |
-| `/tipos/:id` | PATCH | Actualiza tipo |
-| `/tipos/:id` | DELETE | Elimina tipo |
-| `/cafes` | GET | Lista cafés (filtros + paginación) |
-| `/cafes/:id` | GET | Café por ID (incluye `tipo`) |
-| `/cafes` | POST | Crea café (`tipoId` obligatorio) |
-| `/cafes/:id` | PATCH | Actualiza café |
-| `/cafes/:id` | DELETE | Elimina café |
-
-**Filtros de `GET /cafes`:** `tipoId`, `description`, `sortBy` (default `id`),
-`orderBy` (`ASC`/`DESC`), `page` (mín. 1), `limit` (1–50, default 10).
-
-**Validación global:** `ValidationPipe` con `whitelist`, `forbidNonWhitelisted`
-y `transform`; CORS habilitado.
-
-### 3.2 Frontend — rutas
-
-| Ruta | Componente |
+| Servicio | Dirección |
 |---|---|
-| `/` | Redirect a `/cafes` |
-| `/cafes`, `/cafes/nuevo`, `/cafes/editar/:id` | Lista y formulario de cafés |
-| `/tipos`, `/tipos/nuevo`, `/tipos/editar/:id` | Lista y formulario de tipos |
+| Frontend | https://cafe-frontend-odd.onrender.com |
+| API (tipos) | https://cafe-api-odd.onrender.com/tipos |
+| Métricas | https://cafe-api-odd.onrender.com/metrics |
 
-`ApiService` centraliza las llamadas usando `environment.apiUrl`, que puede
-sobrescribirse en runtime con `env.js` (ver sección 6.4).
+La base es un PostgreSQL administrado de Render (`cafe-db-odd`) y los dos
+servicios web corren las imágenes publicadas en Docker Hub. Las instancias
+gratuitas se duermen tras 15 minutos sin tráfico: el primer pedido puede tardar
+cerca de un minuto.
 
-### 3.3 Base de datos
+## Requisitos
 
+- **Docker** con **Docker Compose** (en Windows y Mac, Docker Desktop; abrirlo
+  antes de empezar).
+- **Git**.
+- Puertos libres: `8080`, `3000` y `5432` (más `9090` y `3002` si se usa
+  monitoreo).
+- Solo para desarrollo sin Docker: **Node 20.19+** (o 22/24 LTS) y
+  **Chrome/Chromium** para los tests del frontend.
+
+Se comprueba con:
+
+```bash
+docker --version
+docker compose version
+node -v
 ```
-tipo
-├── id            PK, autoincremental
-├── name          varchar NOT NULL
-└── description   varchar NOT NULL
 
-cafe
-├── id            PK, autoincremental
-├── name          varchar NOT NULL
-├── description   varchar NOT NULL
-└── tipo_id       FK → tipo.id (ManyToOne, onDelete: CASCADE)
+## Cómo correrlo
+
+### Opción A — Docker (la forma recomendada)
+
+```bash
+cp .env.example .env
+docker compose up -d --build
+docker compose ps
 ```
 
-### 3.4 Variables del backend
+| Qué | Dónde |
+|---|---|
+| App | http://localhost:8080 |
+| API · tipos | http://localhost:3000/tipos |
+| API · cafés | http://localhost:3000/cafes |
+| Métricas | http://localhost:3000/metrics |
 
-| Variable | Default | Uso |
-|---|---|---|
-| `DB_HOST` | `localhost` | Host de Postgres |
-| `DB_PORT` | `5432` | Puerto |
-| `DB_USER` | `postgres` | Usuario |
-| `DB_PASSWORD` | `postgres` | Password |
-| `DB_NAME` | `cafedb` | Base |
-| `DB_SSL` | `false` | SSL explícito (prod: `true`) |
-| `DB_SYNCHRONIZE` | `!isProduction` | Crear/ajustar tablas |
-| `NODE_ENV` | — | Solo informativo para los defaults |
-| `PORT` | `3000` | Puerto HTTP |
+La primera vez tarda varios minutos (descarga imágenes y compila). Para seguir
+el arranque:
 
----
+```bash
+docker compose logs -f api
+docker compose logs -f frontend
+```
 
-## 4. Tests, cobertura y lint
+```bash
+docker compose down        # para los contenedores y conserva los datos
+docker compose down -v     # para y BORRA el volumen de PostgreSQL
+docker compose stop        # pausa
+docker compose start       # retoma
+```
 
-### 4.1 Tests
+> El compose construye las imágenes desde el código local. Las imágenes de
+> Docker Hub (`pablodavid98/cafe-*`) son las que usa Render.
 
-**Total: 14 tests reales.**
+### Opción B — desarrollo sin Docker
+
+Son dos aplicaciones separadas, cada una con su `package.json`.
+
+**1. La base de datos:**
+
+```bash
+docker compose up -d postgres
+```
+
+**2. El backend** (en una terminal):
+
+```bash
+cd Cafe-API
+npm ci
+npm run start:dev          # http://localhost:3000
+```
+
+**3. El frontend** (en otra terminal):
+
+```bash
+cd cafe-frontend
+npm ci
+npm start                  # http://localhost:4200
+```
+
+> El backend no lee el archivo `.env` (`ConfigModule` usa
+> `ignoreEnvFile: true`): toma variables del entorno o sus defaults
+> (`localhost:5432`, `postgres/postgres`, base `cafedb`). El frontend usa
+> `environment.ts`, que apunta a `http://localhost:3000`; en el contenedor esa
+> URL se reemplaza con `env.js`.
+
+### Opción C — Render
+
+Ya está desplegado con el Blueprint `render.yaml`. Para publicar una versión
+nueva:
+
+1. Push o merge a `main`.
+2. El CI corre los tests, publica las imágenes en Docker Hub y termina en
+   `success`.
+3. El workflow `CD — Deploy to Render` llama a los Deploy Hooks.
+4. Render descarga `:latest` y reinicia los servicios.
+
+También se puede disparar el CD a mano desde **Actions → CD — Deploy to
+Render → Run workflow**.
+
+### Opción D — Kubernetes local
+
+La carpeta `k8s/` tiene los manifiestos y `kustomization.yaml` los ensambla.
+Requiere minikube y kubectl; ver [`k8s/README.md`](k8s/README.md).
+
+```bash
+minikube start --profile=cafe --driver=docker --cpus=2 --memory=4096 --disk-size=20g
+minikube addons enable ingress --profile=cafe
+minikube image load operaciones-copia-api:latest --profile=cafe
+minikube image load operaciones-copia-frontend:latest --profile=cafe
+kubectl apply -k .
+```
+
+## Tests, cobertura y lint
+
+Hay **14 tests**:
 
 | Proyecto | Tipo | Cantidad | Archivo |
 |---|---|---|---|
 | Backend | Unitarios (mocks) | 4 | `Cafe-API/src/tipos/tipos.controller.spec.ts` + `cafes.controller.spec.ts` |
-| Backend | E2E (Postgres real) | 2 | `Cafe-API/test/create.e2e-spec.ts` |
+| Backend | E2E (PostgreSQL real) | 2 | `Cafe-API/test/create.e2e-spec.ts` |
 | Frontend | Unitarios (HTTP mock) | 2 | `cafe-frontend/src/app/services/api.spec.ts` |
 | Frontend | Smoke (`should create`) | 6 | `cafe-frontend/src/app/components/*/*.spec.ts` + `app.spec.ts` |
 
 ```bash
 # Backend
 cd Cafe-API
+npm ci
+npm run lint:ci       # verifica lint (lo que corre el CI)
 npm run test          # 4 unitarios
-npm run test:cov      # 4 unitarios + cobertura (con umbral)
+npm run test:cov      # unitarios + cobertura con umbral
 npm run test:e2e      # 2 E2E (requiere Postgres en localhost:5432)
 npm run build
 
 # Frontend
 cd cafe-frontend
-npm test -- --watch=false --browsers=ChromeHeadless   # 8 tests
-npm run test:cov -- --watch=false --browsers=ChromeHeadless   # + cobertura
+npm ci
+npm run lint:ci
+CHROME_BIN=/usr/bin/google-chrome \
+  npm run test:cov -- --watch=false --browsers=ChromeHeadless
 npm run build
 ```
 
-Los 6 specs de componentes son los que genera Angular CLI: instancian el
-componente, ejecutan el constructor, el `ngOnInit` y renderizan el template.
-No testean las acciones (`guardar`, `eliminar`), solo que el componente se cree
-y funcione con sus dependencias inyectadas.
+Antes de los E2E, levantar la base:
 
-Estado verificado: **4/4 unitarios**, **2/2 E2E**, **8/8 frontend**, builds OK.
+```bash
+docker compose up -d postgres
+```
 
-### 4.2 Cobertura
+**Cobertura medida (16/11/2026):**
 
-Medida el **16/11/2026** con los comandos de arriba:
+| Proyecto | Statements | Branches | Functions | Líneas |
+|---|---|---|---|---|
+| Backend | **39.0 %** (94/241) | 36.9 % | 14.6 % | **39.4 %** (82/208) |
+| Frontend | **32.5 %** (39/120) | 0 % | 13.7 % | **32.2 %** (38/118) |
 
-| Proyecto | Statements | Branches | Functions | Líneas | Archivos medidos |
-|---|---|---|---|---|---|
-| Backend | **39.0 %** (94/241) | 36.9 % | 14.6 % | **39.4 %** (82/208) | 19 (todo `src`) |
-| Frontend | **32.5 %** (39/120) | 0 % | 13.7 % | **32.2 %** (38/118) | 9 (toda la app) |
-
-**Cómo se calcula cada uno:**
-
-- **Backend:** Jest con `collectCoverageFrom: ["**/*.(t|j)s"]`, así que el
-  denominador es **todo** `src/`: controllers, services, DTOs, entities y
-  `main.ts`, aunque ningún test los importe. El número es conservador y real.
-- **Frontend:** Karma solo instrumenta los archivos que el spec **importa**. Al
-  sumar los specs de componentes, el denominador pasó de 18 statements (solo
-  `api.ts`) a **120** (toda la app). Antes el 33 % era engañoso: medía un
-  archivo de 94 líneas, no la aplicación.
-
-**Por qué Branches queda en 0 % en el frontend:** los templates de Angular no
-generan ramas JavaScript y los tests no recorren los `if` de los métodos. Por
-eso no se declara umbral de branches ahí.
-
-**Umbrales** (si la cobertura baja, el test falla):
+Los umbrales están por debajo del valor actual para **no retroceder**:
 
 | Proyecto | Dónde | Umbral |
 |---|---|---|
-| Backend | `coverageThreshold` en `Cafe-API/package.json` | 35 % statements / 35 % líneas / 30 % branches / 10 % functions |
-| Frontend | `check.global` en `cafe-frontend/karma.conf.js` | 30 % statements / 30 % líneas / 10 % functions |
+| Backend | `coverageThreshold` en `Cafe-API/package.json` | 35/35/30/10 |
+| Frontend | `check.global` en `cafe-frontend/karma.conf.js` | 30/30/10 |
 
-Están por debajo del valor actual a propósito: la idea es **no retroceder**, no
-exigir excelencia de golpe. Al agregar tests, se suben.
+Reportes HTML:
 
-**Dónde se ve el resultado:**
+```bash
+xdg-open Cafe-API/coverage/lcov-report/index.html
+xdg-open cafe-frontend/coverage/cafe-frontend/index.html
+```
 
-- **Consola:** tabla resumen al correr `test:cov`.
-- **GitHub Actions:** tabla en la página del run (Step Summary), en cada job.
-- **Archivos:** `Cafe-API/coverage/lcov.info` y
-  `cafe-frontend/coverage/cafe-frontend/lcov.info` (ignorados por git).
-- No hay servicio externo (Codecov/Coveralls): el reporte vive en el run y en
-  los `lcov.info`, que quedan listos si se quiere integrar uno después.
+**Lint:** hay dos scripts por proyecto. `npm run lint` corrige (`--fix`) y se usa
+local; `npm run lint:ci` verifica sin modificar y con `--max-warnings=0`, y es el
+que corre el CI.
 
-### 4.3 Lint
+## Integración continua y despliegue (GitHub Actions)
 
-Ambos proyectos usan **ESLint flat config** (ESLint 9/10):
-
-| Proyecto | Config | Reglas |
+| Workflow | Se dispara cuando | Corre |
 |---|---|---|
-| Backend | `Cafe-API/eslint.config.mjs` | `recommendedTypeChecked` (con tipos) + Prettier |
-| Frontend | `cafe-frontend/eslint.config.mjs` | `typescript-eslint` + `@angular-eslint` (selectores) |
+| `CI Monorepo` (`ci.yml`) | push o PR a `main`; manual | Backend: lint, unitarios + cobertura, E2E con PostgreSQL, build. Frontend: lint, tests + cobertura, build. Docker: build & push solo en push a `main` |
+| `CD — Deploy to Render` (`cd.yml`) | cuando `CI Monorepo` termina en `success` por un push a `main`; manual | `curl` a los Deploy Hooks de Render |
 
-Hay **dos scripts** por proyecto:
+- **Imágenes publicadas:** `pablodavid98/cafe-api:{sha,latest}` y
+  `pablodavid98/cafe-frontend:{sha,latest}`. No se publica nada si los tests
+  fallan.
+- **Cobertura:** cada job escribe la tabla en el **Step Summary** del run. Los
+  `lcov.info` quedan en el runner y no se commitean.
+- **Deploy:** los servicios de Render tienen `autoDeploy: false`, así que el
+  único disparador es el Deploy Hook. El CD espera a que el CI termine para
+  llamarlo con las imágenes ya publicadas.
+- **Rama:** solo `main` publica y despliega. La rama `tests` no dispara el
+  workflow.
 
-| Script | Qué hace | Dónde se usa |
+**Secrets del repo** (Settings → Secrets and variables → Actions):
+
+| Secret | Uso |
+|---|---|
+| `DOCKERHUB_USERNAME` | Usuario de Docker Hub |
+| `DOCKERHUB_TOKEN` | Token de Docker Hub |
+| `RENDER_DEPLOY_HOOK_API` | Deploy Hook del servicio de la API |
+| `RENDER_DEPLOY_HOOK_FRONTEND` | Deploy Hook del servicio del frontend |
+
+## Estructura
+
+```
+Operaciones-copia/
+├── docker-compose.yml             # postgres + api + frontend
+├── docker-compose.monitoring.yml  # Prometheus + Grafana (opcional)
+├── kustomization.yaml             # ensambla k8s/
+├── render.yaml                    # Blueprint de Render
+├── .env.example
+├── README.md
+├── proyecto.md                    # documentación técnica detallada
+│
+├── Cafe-API/                      # API NestJS
+│   ├── Dockerfile                 # build + start:prod
+│   ├── src/
+│   │   ├── main.ts                # CORS, ValidationPipe, /metrics
+│   │   ├── app.module.ts          # TypeORM + DB_SSL / DB_SYNCHRONIZE
+│   │   ├── metrics.ts             # registry de Prometheus
+│   │   ├── metrics.controller.ts  # GET /metrics
+│   │   ├── tipos/                 # controller, service, DTOs, entity
+│   │   └── cafes/                 # controller, service, DTOs, entity
+│   └── test/create.e2e-spec.ts
+│
+├── cafe-frontend/                 # SPA Angular
+│   ├── Dockerfile                 # build Angular + nginx
+│   ├── nginx.conf                 # SPA fallback + no-store para env.js
+│   ├── karma.conf.js              # cobertura + umbral
+│   ├── docker-entrypoint.d/
+│   │   └── 40-generate-env.sh     # genera env.js desde API_URL
+│   ├── public/env.js
+│   └── src/app/
+│       ├── services/api.ts
+│       └── components/            # cafe-*, tipo-*
+│
+├── k8s/                           # manifiestos de Kubernetes
+├── prometheus/prometheus.yml
+├── grafana/                       # datasource + dashboard
+└── .github/workflows/
+    ├── ci.yml
+    └── cd.yml
+```
+
+## Endpoints
+
+### Salud y métricas
+
+| Método | Ruta | Qué hace |
 |---|---|---|
-| `npm run lint` | ESLint con `--fix` | local, antes de commitear |
-| `npm run lint:ci` | ESLint **sin** `--fix` + `--max-warnings=0` | CI |
+| `GET` | `/` | Health check (lo usa Render) |
+| `GET` | `/metrics` | Métricas en formato Prometheus |
 
-**Por qué la diferencia:** con `--fix` el CI arreglaba el código en memoria y
-salía en verde, así que un archivo mal formateado nunca se detectaba (los
-cambios del runner se descartan). `lint:ci` **verifica**: si algo no cumple,
-el job falla. Localmente seguís teniendo el auto-fix.
+### Tipos
 
-```bash
-cd Cafe-API && npm run lint        # corrige
-cd Cafe-API && npm run lint:ci     # verifica (lo que corre el CI)
-```
-
----
-
-## 5. CI/CD — GitHub Actions
-
-**Archivos:** `.github/workflows/ci.yml` (integración) y
-`.github/workflows/cd.yml` (despliegue).
-
-| Acción | Backend | Frontend | Docker (push) | Deploy Render |
-|---|---|---|---|---|
-| Push a `main` | ✅ | ✅ | ✅ | ✅ |
-| PR a `main` | ✅ | ✅ | ❌ | ❌ |
-| Push a `tests` | ❌ | ❌ | ❌ | ❌ |
-| `workflow_dispatch` | ✅ | ✅ | ❌ | ✅ |
-
-- **Backend:** `npm ci` → `lint:ci` → `test:cov` (4 unitarios + cobertura con
-  umbral) → 2 E2E con service container `postgres:16` → build.
-- **Frontend:** `npm ci` → `lint:ci` → `test:cov` con Chromium headless
-  (8 tests + cobertura con umbral) → build.
-- **Cobertura:** cada job escribe la tabla de cobertura en el **Step Summary**
-  del run. Los `lcov.info` quedan en el runner (no se commitean).
-- **Docker:** solo en push a `main` y si ambos jobs pasan. Publica:
-  - `docker.io/pablodavid98/cafe-api:{sha,latest}`
-  - `docker.io/pablodavid98/cafe-frontend:{sha,latest}`
-  - `docker.io/pablodavid98/cafe-postgres:16`
-- **Deploy (`cd.yml`):** no corre en paralelo al CI. Se dispara con
-  `workflow_run` cuando el workflow `CI Monorepo` termina, y solo si terminó en
-  `success` y fue por un push a `main`; así los hooks se llaman con las imágenes
-  ya publicadas. Hace `curl` a los Deploy Hooks de Render
-  (`RENDER_DEPLOY_HOOK_API` y `RENDER_DEPLOY_HOOK_FRONTEND`).
-  `workflow_dispatch` permite redeployar el `:latest` actual a mano.
-
-**Secrets requeridos:** `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`,
-`RENDER_DEPLOY_HOOK_API`, `RENDER_DEPLOY_HOOK_FRONTEND`.
-
-> Para que existan imágenes nuevas hay que mergear/pushear a `main`. La rama
-> `tests` no dispara el workflow. GitHub solo ejecuta el CD si `cd.yml` existe
-> en la rama por defecto (`main`).
-
----
-
-## 6. Docker
-
-### 6.1 `docker-compose.yml` (raíz)
-
-Los valores se toman de `.env` o de sus defaults, así funciona con o sin archivo:
-
-```yaml
-postgres:
-  environment:
-    POSTGRES_USER: ${DB_USER:-postgres}
-    POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
-    POSTGRES_DB: ${DB_NAME:-cafedb}
-
-api:
-  environment:
-    DB_HOST: ${DB_HOST:-postgres}
-    DB_PORT: ${DB_PORT:-5432}
-    DB_USER: ${DB_USER:-postgres}
-    DB_PASSWORD: ${DB_PASSWORD:-postgres}
-    DB_NAME: ${DB_NAME:-cafedb}
-    DB_SSL: ${DB_SSL:-false}
-    DB_SYNCHRONIZE: ${DB_SYNCHRONIZE:-true}
-
-frontend:
-  environment:
-    API_URL: ${API_URL:-http://localhost:3000}
-```
-
-### 6.2 `Cafe-API/Dockerfile` (una sola etapa)
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /opt/app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-ENV NODE_ENV=production
-EXPOSE 3000
-CMD ["npm", "run", "start:prod"]
-```
-
-- Compila **en el build**, no en cada arranque.
-- `NODE_ENV=production` está horneado en la imagen.
-- Por eso `DB_SSL` y `DB_SYNCHRONIZE` son explícitos: la misma imagen sirve en
-  local (sin SSL) y en producción.
-
-### 6.3 `cafe-frontend/Dockerfile` (build + nginx)
-
-```dockerfile
-FROM node:20-alpine AS build
-WORKDIR /opt/app
-COPY package*.json ./
-RUN npm install
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine AS prod
-ENV API_URL=http://localhost:3000
-COPY --from=build /opt/app/dist/cafe-frontend/browser /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY docker-entrypoint.d/40-generate-env.sh /docker-entrypoint.d/40-generate-env.sh
-RUN chmod +x /docker-entrypoint.d/40-generate-env.sh
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-`nginx.conf` incluye SPA fallback y `Cache-Control: no-store` para `/env.js`.
-
-### 6.4 `API_URL` en runtime (deploy hook)
-
-Angular corre en el navegador, así que no puede leer variables del contenedor.
-El puente es `env.js`:
-
-1. `public/env.js` define `window.__env` (default para `ng serve`).
-2. `index.html` carga `env.js` antes de los bundles.
-3. `main.ts` sobrescribe `environment.apiUrl` si existe `window.__env.apiUrl`.
-4. `40-generate-env.sh` genera `/usr/share/nginx/html/env.js` al arrancar el
-   contenedor con el valor de `API_URL`.
-
-Consecuencia: **cambiar la URL no requiere reconstruir la imagen**.
-
-```bash
-# Misma imagen, otra URL
-docker run --rm -p 8081:80 -e API_URL=http://192.168.1.50:3000 operaciones-copia-frontend:latest
-curl http://localhost:8081/env.js
-# window.__env = { apiUrl: "http://192.168.1.50:3000" };
-```
-
-### 6.5 `DB_SSL` y `DB_SYNCHRONIZE`
-
-| Entorno | `DB_SSL` | `DB_SYNCHRONIZE` |
+| Método | Ruta | Qué hace |
 |---|---|---|
-| `npm run start:dev` (sin env) | `false` | `true` |
-| Docker local | `false` | `true` |
-| Kubernetes local | `false` | `true` |
-| Producción | `true` | `false` (o `true` solo el primer deploy) |
+| `GET` | `/tipos` | Lista todos |
+| `GET` | `/tipos/1` | Uno por ID |
+| `POST` | `/tipos` | Crea uno |
+| `PATCH` | `/tipos/1` | Actualiza uno |
+| `DELETE` | `/tipos/1` | Elimina uno |
 
-### 6.6 Comandos Docker
+### Cafés
 
-```bash
-docker compose up -d                 # postgres + api + frontend
-docker compose up -d --build         # reconstruir imágenes locales
-docker compose logs -f api
-docker compose down                  # no borra datos
-docker compose down -v               # borra el volumen de Postgres
+| Método | Ruta | Qué hace |
+|---|---|---|
+| `GET` | `/cafes` | Lista con filtros y paginación |
+| `GET` | `/cafes/1` | Uno por ID (incluye su `tipo`) |
+| `POST` | `/cafes` | Crea uno (`tipoId` obligatorio) |
+| `PATCH` | `/cafes/1` | Actualiza uno |
+| `DELETE` | `/cafes/1` | Elimina uno |
+
+**Filtros de `GET /cafes`** (opcionales):
+
+```
+?tipoId=1              filtra por tipo
+?description=corto     coincidencia en la descripción
+?sortBy=name           campo de orden (default: id)
+?orderBy=DESC          ASC o DESC (default: ASC)
+?page=1&limit=10       paginación (limit máximo 50)
 ```
 
-### 6.7 Compose legado
-
-`Cafe-API/docker-compose.yml` solo define API + Postgres. No se usa para el flujo
-completo y puede quedar desactualizado.
-
----
-
-## 7. Variables de entorno
-
-Hay un único `.env.example` en la raíz. No se commitea ningún `.env` real.
+### Ejemplos
 
 ```bash
-cp .env.example .env
+# Crear un tipo
+curl -X POST http://localhost:3000/tipos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Clásico","description":"Cafés de siempre"}'
+
+# Crear un café
+curl -X POST http://localhost:3000/cafes \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"Espresso","description":"Corto e intenso","tipoId":1}'
+
+# Listar cafés filtrando por tipo y ordenando
+curl 'http://localhost:3000/cafes?tipoId=1&sortBy=name&orderBy=ASC&page=1&limit=10'
 ```
+
+La API valida con `ValidationPipe` global (`whitelist`,
+`forbidNonWhitelisted`, `transform`). Un body inválido responde `400`.
+
+## Variables de entorno
+
+Hay un único `.env.example` en la raíz. Ningún `.env` real se commitea.
 
 | Variable | ¿Secreto? | Local | Producción |
 |---|---|---|---|
@@ -479,356 +350,163 @@ cp .env.example .env
 | `DB_HOST` | No | `postgres` | host del proveedor |
 | `DB_PORT` | No | `5432` | según proveedor |
 | `DB_SSL` | No | `false` | `true` |
-| `DB_SYNCHRONIZE` | No | `true` | `false` |
-| `API_URL` | No (es pública) | `http://localhost:3000` | URL pública del API |
+| `DB_SYNCHRONIZE` | No | `true` | `true` (hasta tener migraciones) |
+| `API_URL` | No | `http://localhost:3000` | URL pública del API |
 | `GRAFANA_USER` | No | `admin` | — |
 | `GRAFANA_PASSWORD` | **Sí** | `admin` | — |
-| `DOCKERHUB_USERNAME` | No | — | usuario de Docker Hub |
-| `TAG` | No | — | SHA de la imagen |
 
-- `.gitignore` ignora `.env` y `.env.*`, pero permite `.env.example`.
-- El backend usa `ConfigModule.forRoot({ ignoreEnvFile: true })`: en desarrollo
-  **no** lee `.env`; usa variables del entorno o sus defaults.
-- En Kubernetes los valores van a `ConfigMap` / `Secret`, no a `.env`.
+En Kubernetes los valores van a `ConfigMap` y `Secret`, no a `.env`.
 
----
+## Docker
 
-# PARTE II — Monitoreo y Kubernetes (solo local)
+### Las imágenes
 
-> Esta parte **no** se despliega en producción. Es para desarrollo y observación
-> local.
-
-## 8. Monitoreo — Prometheus + Grafana
-
-### 8.1 Componentes
-
-| Servicio | Imagen | Puerto local |
+| Servicio | Imagen local | Cómo se construye |
 |---|---|---|
-| Prometheus | `prom/prometheus:latest` | 9090 |
-| Grafana | `grafana/grafana:latest` | 3002 |
+| `postgres` | `postgres:16` | oficial, no se construye |
+| `api` | `operaciones-copia-api:latest` | `Cafe-API/Dockerfile` |
+| `frontend` | `operaciones-copia-frontend:latest` | `cafe-frontend/Dockerfile` |
+
+Las dos imágenes propias también se publican en Docker Hub desde el CI
+(`pablodavid98/cafe-api` y `pablodavid98/cafe-frontend`).
+
+### Build
+
+- **Backend:** una etapa sobre `node:20-alpine`; instala, compila y arranca con
+  `npm run start:prod`. `NODE_ENV=production` queda horneado.
+- **Frontend:** dos etapas. Compila Angular con Node y la imagen final es
+  `nginx:alpine` sirviendo los archivos estáticos.
+
+### La URL del API en runtime
+
+Angular corre en el navegador y no puede leer variables del contenedor. El
+puente es `env.js`:
+
+1. `public/env.js` inicializa `window.__env` (vacío con `ng serve`).
+2. `index.html` carga `env.js` antes de los bundles.
+3. `main.ts` sobrescribe `environment.apiUrl` si existe `window.__env.apiUrl`
+   (el default de desarrollo es `http://localhost:3000`).
+4. `40-generate-env.sh` genera `/usr/share/nginx/html/env.js` al arrancar el
+   contenedor con el valor de `API_URL`.
+
+Por eso **cambiar la URL no requiere reconstruir la imagen**: alcanza con
+reiniciar el contenedor con otro `API_URL`. nginx sirve `env.js` con
+`Cache-Control: no-store`.
+
+### `DB_SSL` y `DB_SYNCHRONIZE`
+
+| Entorno | `DB_SSL` | `DB_SYNCHRONIZE` |
+|---|---|---|
+| `npm run start:dev` | `false` | `true` |
+| Docker local | `false` | `true` |
+| Kubernetes local | `false` | `true` |
+| Render | `true` | `true` (hasta tener migraciones) |
+
+> `Cafe-API/docker-compose.yml` es un compose legado (solo API + Postgres). El
+> flujo completo se hace con el compose de la raíz.
+
+## Monitoreo (opcional, solo local)
 
 ```bash
+docker compose up -d api
 docker compose -f docker-compose.monitoring.yml up -d
-```
-
-- Proyecto Compose: `cafe-monitoring` (separado del stack principal).
-- Grafana aprovisiona datasource y dashboard automáticamente desde `grafana/`.
-- Volúmenes: `prometheus_data` y `grafana_data`.
-
-### 8.2 Prometheus
-
-`prometheus/prometheus.yml` scrapea `host.docker.internal:3000` (API en el host o
-contenedor con el 3000 publicado) y a sí mismo en `localhost:9090`.
-El compose agrega `extra_hosts: host.docker.internal:host-gateway`.
-
-### 8.3 Dashboard provisionado
-
-**"Café API · Estado y tráfico"** — 5 paneles:
-
-1. ¿API en línea? (`up{job="cafe-api"}`)
-2. Peticiones totales desde el arranque (excluye `/metrics` y `/health`)
-3. Peticiones en la última hora (`increase(...[1h])`)
-4. Reparto por endpoint · última hora (donut Cafés vs Tipos)
-5. Peticiones por endpoint · por segundo (timeseries)
-
-Métricas disponibles: `http_requests_total{method,route,code}`,
-`http_request_duration_seconds` y métricas por defecto de Node.
-
-### 8.4 Comandos
-
-```bash
-docker compose -f docker-compose.monitoring.yml up -d
-docker compose -f docker-compose.monitoring.yml logs -f
-docker compose -f docker-compose.monitoring.yml down
-```
-
-### 8.5 Consideraciones
-
-- El contador `http_requests_total` **se reinicia** cuando se reinicia la API.
-- Tras reiniciar Grafana, `admin/admin` puede dejar de validar (Grafana 13 no
-  re-aplica el env en cada arranque):
-  ```bash
-  docker exec grafana grafana cli admin reset-admin-password admin
-  ```
-- Cambiar el dashboard: editar `grafana/dashboards/cafe-api.json`, subir el
-  `version` y reiniciar Grafana.
-
----
-
-## 9. Kubernetes local — minikube
-
-### 9.1 Requisitos
-
-- Docker
-- `minikube` y `kubectl` (instalados en `~/.local/bin` en esta máquina)
-- Agregar `~/.local/bin` al `PATH` si no está
-
-```bash
-minikube start --profile=cafe --driver=docker --cpus=2 --memory=4096 --disk-size=20g
-minikube addons enable ingress --profile=cafe
-```
-
-### 9.2 Manifiestos
-
-| Archivo | Contenido |
-|---|---|
-| `k8s/namespace.yaml` | Namespace `cafe` |
-| `k8s/secret.yaml` | `DB_PASSWORD` y `GRAFANA_PASSWORD` (**dev**) |
-| `k8s/api-config.yaml` | `DB_*`, `DB_SSL`, `DB_SYNCHRONIZE` |
-| `k8s/frontend-config.yaml` | `API_URL=http://api.cafe.local` |
-| `k8s/postgres.yaml` | StatefulSet + Service + PVC 1Gi |
-| `k8s/backend.yaml` | Deployment + Service + initContainer que espera Postgres |
-| `k8s/frontend.yaml` | Deployment + Service |
-| `k8s/prometheus.yaml` | Deployment + Service (9090) |
-| `k8s/prometheus/prometheus.yml` | Scrapea `api:3000` |
-| `k8s/grafana.yaml` | Deployment + Service (3000) |
-| `k8s/ingress.yaml` | `cafe.local`, `api.cafe.local`, `grafana.cafe.local` |
-
-`kustomization.yaml` (raíz) ensambla todo y genera los ConfigMaps de Prometheus
-y Grafana **desde los archivos existentes**, sin duplicarlos:
-
-```bash
-kubectl apply -k .
-```
-
-### 9.3 Puesta en marcha
-
-```bash
-# Imágenes locales (no están en un registry)
-minikube image load operaciones-copia-api:latest --profile=cafe
-minikube image load operaciones-copia-frontend:latest --profile=cafe
-
-# Manifiestos
-kubectl apply -k .
-
-# Hosts (una sola vez)
-echo "$(minikube ip --profile=cafe) cafe.local api.cafe.local grafana.cafe.local" | sudo tee -a /etc/hosts
-
-# Esperar
-kubectl -n cafe wait --for=condition=ready pod --all --timeout=300s
 ```
 
 | Servicio | URL |
 |---|---|
-| Frontend | http://cafe.local |
-| API | http://api.cafe.local/tipos |
-| Métricas | http://api.cafe.local/metrics |
-| Grafana | http://grafana.cafe.local (admin/admin) |
-| Prometheus | `kubectl -n cafe port-forward svc/prometheus 9090:9090` |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3002 (`admin` / `admin`) |
 
-### 9.4 Verificación realizada
+Prometheus scrapea la API en `host.docker.internal:3000`. Grafana aprovisiona
+automáticamente el datasource y el dashboard **"Café API · Estado y tráfico"**
+(5 paneles). El contador `http_requests_total` se reinicia cuando se reinicia la
+API.
 
-Todo comprobado en el cluster `cafe` (minikube v1.39.0 / kubectl v1.37.2):
+## Render
 
-- 5 pods `Running` y `Ready` (api, frontend, postgres, prometheus, grafana),
-  **0 reinicios**.
-- `cafe.local/` → 200; `/cafes` y `/tipos` → 200 (SPA fallback).
-- `env.js` → `window.__env = { apiUrl: "http://api.cafe.local" };`
-- CRUD completo: POST/GET/PATCH/DELETE de tipos y cafés, filtros y paginación.
-- Validación: `POST /tipos` inválido → 400.
-- Persistencia: se reinició el pod de Postgres y los datos del PVC siguieron ahí.
-- Prometheus: targets `cafe-api` y `prometheus` en **up**.
-- Grafana: login OK, dashboard con 5 paneles y datos reales.
+El Blueprint `render.yaml` define:
 
-### 9.5 Operación
-
-```bash
-kubectl -n cafe get pods,svc,ingress,pvc
-kubectl -n cafe logs deploy/api
-kubectl -n cafe port-forward svc/grafana 3002:3000
-
-# Rebuild de imágenes locales
-docker compose build api frontend
-minikube image load operaciones-copia-api:latest --profile=cafe
-minikube image load operaciones-copia-frontend:latest --profile=cafe
-kubectl -n cafe rollout restart deploy/api deploy/frontend
-
-# Destruir
-kubectl delete -k .
-minikube delete --profile=cafe
-```
-
-### 9.6 Consideraciones
-
-- **Imágenes:** `imagePullPolicy: IfNotPresent`. Si no se cargan con
-  `minikube image load`, los pods quedan en `ImagePullBackOff`.
-- **Grafana necesita memoria:** con 256 Mi el pod fue `OOMKilled`; el manifiesto
-  usa `1Gi` de límite.
-- **Postgres:** PVC `data-postgres-0`; `subPath: pgdata` evita problemas con
-  `lost+found`.
-- **Prometheus:** datos en `emptyDir` (se pierden al recrear el pod).
-- **Sin `depends_on`:** el backend usa un `initContainer` con `pg_isready`.
-- **Secrets:** `k8s/secret.yaml` tiene valores de desarrollo; no usarlo tal cual
-  en un cluster real.
-- **Ingress:** clase `nginx` provista por el addon de minikube.
-
----
-
-# PARTE III — Despliegue en Render
-
-> Producción usa las imágenes publicadas en Docker Hub. Render **no construye**
-> las imágenes: solo las descarga y las ejecuta.
-
-## 10. Render — despliegue con Docker Hub y Deploy Hooks
-
-### 10.1 Arquitectura
-
-| Servicio | Tipo | Imagen / recurso | URL |
-|---|---|---|---|
-| `cafe-api-odd` | Web Service (Docker) | `docker.io/pablodavid98/cafe-api:latest` | https://cafe-api-odd.onrender.com |
-| `cafe-frontend-odd` | Web Service (Docker) | `docker.io/pablodavid98/cafe-frontend:latest` | https://cafe-frontend-odd.onrender.com |
-| `cafe-db-odd` | Render Postgres 16 (free) | — | host interno |
-
-- Las imágenes son **públicas** (`pablodavid98`), así que Render no necesita
-  credenciales de registry.
-- El frontend recibe `API_URL` en runtime y genera `env.js`; no hay que
-  reconstruir la imagen para cambiar la URL.
-- `cafe-postgres` de Docker Hub **no se usa**: Render provee Postgres gestionado.
-
-### 10.2 Blueprint (`render.yaml`)
-
-El archivo `render.yaml` de la raíz define todo:
-
-```bash
-# En Render: New → Blueprint → seleccionar el repo → Apply
-```
-
-- **Postgres:** `cafe-db-odd`, plan free, PostgreSQL 16, región `oregon`.
-- **API:** variables `DB_*` tomadas del Postgres con `fromDatabase`,
-  `DB_SSL=true` y `DB_SYNCHRONIZE=true`.
-- **Frontend:** `API_URL` tomada de `RENDER_EXTERNAL_URL` del servicio de la API
-  (si el Blueprint no la resuelve, se reemplaza por la URL literal).
-- **Ambos servicios:** `autoDeploy: false`. Sin eso, Render redeployaría solo al
-  detectar un `:latest` nuevo y el Deploy Hook sería un segundo deploy
-  redundante.
-
-### 10.3 Deploy Hooks desde GitHub Actions
-
-Render **no redeploya solo** cuando cambia `:latest` (`autoDeploy: false`). El
-workflow `.github/workflows/cd.yml` se dispara con `workflow_run` cuando termina
-`CI Monorepo` en `main` con `success`, y hace:
-
-```bash
-curl -fsS -X POST "$RENDER_DEPLOY_HOOK_API"
-curl -fsS -X POST "$RENDER_DEPLOY_HOOK_FRONTEND"
-```
-
-| Secret | Dónde se obtiene |
-|---|---|
-| `RENDER_DEPLOY_HOOK_API` | Render → `cafe-api-odd` → Settings → Deploy Hook |
-| `RENDER_DEPLOY_HOOK_FRONTEND` | Render → `cafe-frontend-odd` → Settings → Deploy Hook |
-
-Render responde **200** (deploy iniciado) o **202** (encolado). `curl -f` hace
-fallar el job si Render rechaza la solicitud. El hook no espera a que termine el
-deploy; el resultado se ve en el dashboard.
-
-### 10.4 Variables de entorno en Render
-
-| Variable | Servicio | Valor |
+| Recurso | Tipo | Imagen / plan |
 |---|---|---|
-| `DB_HOST` / `DB_PORT` / `DB_USER` / `DB_PASSWORD` / `DB_NAME` | API | del Postgres de Render |
-| `DB_SSL` | API | `true` |
-| `DB_SYNCHRONIZE` | API | `true` (todavía no hay migraciones) |
-| `API_URL` | Frontend | `https://cafe-api-odd.onrender.com` |
+| `cafe-api-odd` | Web Service (Docker) | `docker.io/pablodavid98/cafe-api:latest` |
+| `cafe-frontend-odd` | Web Service (Docker) | `docker.io/pablodavid98/cafe-frontend:latest` |
+| `cafe-db-odd` | PostgreSQL 16 | plan free |
 
-`NODE_ENV=production` ya viene en la imagen y `PORT` lo inyecta Render.
+- Las imágenes son públicas: Render no necesita credenciales de registry.
+- `autoDeploy: false` en ambos servicios: el deploy lo dispara el CD con los
+  Deploy Hooks.
+- `DB_SSL=true` y `DB_SYNCHRONIZE=true` (todavía no hay migraciones).
+- El frontend recibe `API_URL` desde el servicio de la API.
 
-### 10.5 Flujo completo
+**Límites del plan free:** la base expira a los 30 días, los web services se
+duermen a los 15 minutos, 512 MB de RAM / 0.1 CPU y 750 horas por mes.
 
-```
-push a main
-  → CI (ci.yml): tests backend + frontend
-  → CI (ci.yml): docker build & push (Docker Hub :sha y :latest)
-  → CI termina en success
-  → CD (cd.yml): curl Deploy Hook API
-               → curl Deploy Hook Frontend
-  → Render descarga :latest → health check → online
-```
+**Rollback:** cada push publica `:<sha>` además de `:latest`. En Render se puede
+volver a un deploy anterior (en free, a los dos últimos).
 
-### 10.6 Plan free: límites a tener en cuenta
+## Problemas frecuentes
 
-- El Postgres free **expira a los 30 días** (1 GB, sin backups).
-- Los web services se **duermen a los 15 min** sin tráfico; el arranque en frío
-  tarda ~1 min por servicio.
-- 512 MB de RAM / 0.1 CPU y 750 horas de instancia por mes.
-- Sin shell, sin disco persistente y sin red privada de entrada (la API sí puede
-  hablar con el Postgres interno de la misma región).
-
-### 10.7 Rollback
-
-- Cada push publica `:<sha>` además de `:latest`.
-- En Render se puede volver a un deploy anterior (en free, a los dos últimos).
-- La imagen del SHA debe seguir existiendo en Docker Hub.
-
-### 10.8 Verificación
-
-Verificado el **16/11/2026**:
-
-```bash
-curl -s https://cafe-api-odd.onrender.com/tipos      # 200 JSON
-curl -s https://cafe-api-odd.onrender.com/cafes      # 200 JSON
-curl -s https://cafe-api-odd.onrender.com/metrics | head
-curl -s https://cafe-frontend-odd.onrender.com/env.js  # apiUrl correcta
-```
-
-- Escritura contra el Postgres gestionado (`cafe-db-odd`) → persiste.
-- Deploy disparado desde GitHub Actions con los dos Deploy Hooks.
-
-> El primer request después del spin-down puede tardar ~1 min.
-
----
-
-# ANEXOS
-
-## 11. Comandos rápidos
-
-```bash
-# Stack completo en Docker
-docker compose up -d
-docker compose up -d --build
-
-# Monitoreo local
-docker compose -f docker-compose.monitoring.yml up -d
-
-# Desarrollo
-cd Cafe-API && npm run start:dev        # API en 3000
-cd cafe-frontend && npm start           # ng serve en 4200
-
-# Tests
-cd Cafe-API && npm run test:cov && npm run test:e2e
-cd cafe-frontend && npm run test:cov -- --watch=false --browsers=ChromeHeadless
-
-# Lint (local corrige / CI verifica)
-cd Cafe-API && npm run lint
-cd cafe-frontend && npm run lint:ci
-
-# Kubernetes
-kubectl apply -k .
-kubectl -n cafe get pods,svc,ingress
-```
-
-## 12. Resumen
-
-| Tema | Dónde |
+| Síntoma | Causa y solución |
 |---|---|
-| Aplicación | Angular 20 + NestJS 11 + PostgreSQL 16 |
-| Docker local | `docker-compose.yml` (puertos 8080 / 3000 / 5432) |
-| Monitoreo local | `docker-compose.monitoring.yml` (9090 / 3002) |
-| Kubernetes local | `k8s/` + `kustomization.yaml` (minikube) |
-| CI/CD | GitHub Actions → Docker Hub (`pablodavid98/cafe-*`) |
-| Calidad | ESLint (`lint:ci`) + cobertura con umbral (39 % API / 32.5 % frontend) |
-| Producción | Render (`render.yaml`) con imágenes de Docker Hub + Deploy Hooks |
-| Configuración | `.env.example` (Compose) + ConfigMap/Secret (k8s) + env vars (Render) |
-| URL del API | `API_URL` en runtime → `env.js` (sin rebuild) |
+| `port is already allocated` | Otro programa usa 8080, 3000 o 5432. Cerrarlo o cambiar el puerto en el compose. |
+| `Cannot connect to the Docker daemon` | Docker no está corriendo. Abrir Docker Desktop o iniciar el servicio en Linux. |
+| En Linux, `permission denied` al usar Docker | Anteponer `sudo` o agregar el usuario al grupo `docker`. |
+| El front carga pero no trae datos | La URL del API es incorrecta. Revisar `API_URL` (`http://localhost:3000`), recrear el contenedor y recargar con `Ctrl + Shift + R`. |
+| El front no muestra datos al recién levantar | El backend todavía está iniciando. Ver `docker compose logs -f api`. |
+| `env.js` con una URL vieja | El navegador cacheó el archivo. Recargar forzado; nginx ya manda `no-store`. |
+| Los E2E fallan con `ECONNREFUSED` | PostgreSQL no está levantado. Correr `docker compose up -d postgres`. |
+| Karma: `No binary for ChromeHeadless` | Falta Chrome/Chromium o `CHROME_BIN` apunta mal. Verificar `which google-chrome chromium`. |
+| La base arranca con datos viejos o falla | Volumen de una versión anterior. `docker compose down -v` y levantar de nuevo. |
+| El primer request a Render tarda ~1 min | Es el spin-down del plan free. Precalentar con un `curl` antes de la demo. |
+| `POST /tipos` o `/cafes` responde 400 | Validación: `name` de al menos 3 caracteres y, en cafés, `tipoId` positivo. |
 
-## 13. Pendientes
+## Scripts
 
-1. **Migraciones de TypeORM:** hoy Render usa `DB_SYNCHRONIZE=true`; pasar a
-   migraciones y `DB_SYNCHRONIZE=false`.
-2. **Postgres free:** renovarlo antes de los 30 días o pasar a un plan pago.
-3. **Cobertura:** subir el frontend testeando las acciones (`guardar`,
-   `eliminar`) y los `catchError`; hoy los specs solo verifican la creación.
-4. Evaluar `npm ci` y multi-stage en los Dockerfiles (opcional; hoy se prioriza
-   la simplicidad).
-5. Publicar imágenes multi-arch si se migra a un servidor ARM.
-6. Commitear `render.yaml`, `cd.yml`, los specs y esta documentación.
+**Cafe-API/**
+
+| Comando | Qué hace |
+|---|---|
+| `npm run start:dev` | arranca con recarga automática |
+| `npm run build` | compila TypeScript a `dist/` |
+| `npm run start:prod` | corre lo compilado |
+| `npm run lint` | ESLint con autofix |
+| `npm run lint:ci` | ESLint sin autofix, `--max-warnings=0` |
+| `npm run test` | unitarios (Jest) |
+| `npm run test:cov` | unitarios + cobertura |
+| `npm run test:e2e` | E2E contra PostgreSQL |
+
+**cafe-frontend/**
+
+| Comando | Qué hace |
+|---|---|
+| `npm start` | servidor de desarrollo en el 4200 |
+| `npm run build` | compila para producción |
+| `npm run lint` | ESLint con autofix |
+| `npm run lint:ci` | ESLint sin autofix, `--max-warnings=0` |
+| `npm test` | tests con Karma + Jasmine (watch) |
+| `npm run test:cov` | tests + cobertura |
+
+## Cosas para saber
+
+- **Validación:** los DTOs usan `class-validator` y un `ValidationPipe` global.
+  Un body inválido responde `400` con `{ "message": "..." }`.
+- **Consultas parametrizadas:** TypeORM manda los valores aparte, no pegados en
+  el SQL.
+- **Tablas:** las entidades son la fuente de verdad. Con
+  `DB_SYNCHRONIZE=true` TypeORM crea y actualiza las tablas solo. En producción
+  eso se reemplazará por migraciones.
+- **CORS:** el frontend y la API corren en puertos distintos, por eso la API
+  tiene `enableCors()`.
+- **El `.env` no viaja en la imagen:** los `.dockerignore` lo excluyen y las
+  variables llegan por `environment:` del compose.
+- **Cobertura sin servicios externos:** el reporte vive en el run de GitHub
+  Actions y en los `lcov.info`. No se usa Codecov ni Coveralls.
+- **Rama `main`:** es la única que publica imágenes y despliega. Un push a otra
+  rama no dispara el CI.
+
+## Documentación
+
+- [`proyecto.md`](proyecto.md): documentación técnica detallada (decisiones,
+  verificación, Render, Kubernetes, monitoreo).
+- [`k8s/README.md`](k8s/README.md): Kubernetes local con minikube.
+- [`.env.example`](.env.example): variables documentadas.
