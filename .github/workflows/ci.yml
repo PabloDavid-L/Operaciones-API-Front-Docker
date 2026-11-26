@@ -64,6 +64,23 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Sube el lcov a Codecov. Las rutas son desde la raíz del repo:
+      # `defaults.run.working-directory` no afecta a los steps `uses`.
+      # `network_prefix` antepone la carpeta del proyecto porque el lcov
+      # guarda rutas relativas (`src/...`).
+      # Con fail_ci_if_error: false, una caída de Codecov no rompe el CI.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: ./Cafe-API/coverage/lcov.info
+          flags: backend
+          name: backend
+          network_prefix: Cafe-API/
+          disable_search: true
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: E2E tests
         run: npm run test:e2e
         env:
@@ -130,6 +147,20 @@ jobs:
               | sed -n '/Coverage summary/,$p' | head -6 || true
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      # Mismo criterio que el backend: un solo archivo lcov, flag propia y
+      # prefijo para que las rutas `src/...` apunten a `cafe-frontend/src/...`.
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          files: ./cafe-frontend/coverage/cafe-frontend/lcov.info
+          flags: frontend
+          name: frontend
+          network_prefix: cafe-frontend/
+          disable_search: true
+          fail_ci_if_error: false
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Build
         run: npm run build
