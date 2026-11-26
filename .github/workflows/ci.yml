@@ -66,8 +66,8 @@ jobs:
 
       # Sube el lcov a Codecov. Las rutas son desde la raíz del repo:
       # `defaults.run.working-directory` no afecta a los steps `uses`.
-      # `network_prefix` antepone la carpeta del proyecto porque el lcov
-      # guarda rutas relativas (`src/...`).
+      # Codecov resuelve solo las rutas relativas del lcov (`src/...`)
+      # anteponiendo la carpeta del proyecto; no hace falta `network_prefix`.
       # Con fail_ci_if_error: false, una caída de Codecov no rompe el CI.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
@@ -75,7 +75,6 @@ jobs:
           files: ./Cafe-API/coverage/lcov.info
           flags: backend
           name: backend
-          network_prefix: Cafe-API/
           disable_search: true
           fail_ci_if_error: false
         env:
@@ -148,15 +147,13 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      # Mismo criterio que el backend: un solo archivo lcov, flag propia y
-      # prefijo para que las rutas `src/...` apunten a `cafe-frontend/src/...`.
+      # Mismo criterio que el backend: un solo archivo lcov y flag propia.
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
           files: ./cafe-frontend/coverage/cafe-frontend/lcov.info
           flags: frontend
           name: frontend
-          network_prefix: cafe-frontend/
           disable_search: true
           fail_ci_if_error: false
         env:
